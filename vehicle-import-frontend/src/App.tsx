@@ -3,6 +3,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Vehicles from "./pages/Vehicles";
+import VehicleDetail from "./pages/VehicleDetail";
 import Tools from "./pages/Tools";
 import Inspections from "./pages/Inspections";
 import PreInspections from "./pages/PreInspections";
@@ -26,6 +27,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/vehicles" element={<Vehicles />} />
+            <Route path="/vehicles/:id" element={<VehicleDetail />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/inspections" element={<Inspections />} />
             <Route path="/pre-inspections" element={<PreInspections />} />

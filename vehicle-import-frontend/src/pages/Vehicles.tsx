@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, Vehicle, VehicleCreate } from "../services/api";
 import StatusBadge from "../components/StatusBadge";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Eye } from "lucide-react";
 
 const emptyForm: VehicleCreate = {
   vin: "", make: "", model: "", year: 2024, origin_country: "",
@@ -9,10 +10,12 @@ const emptyForm: VehicleCreate = {
 };
 
 export default function Vehicles() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [showSlider, setShowSlider] = useState(false);
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [form, setForm] = useState<VehicleCreate>({ ...emptyForm });
 
@@ -25,6 +28,30 @@ export default function Vehicles() {
 
   useEffect(() => { load(); }, [search, filterStatus]);
 
+  // Handle ?edit=id from VehicleDetail page
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (editId && vehicles.length > 0) {
+      const v = vehicles.find((veh) => veh.id === Number(editId));
+      if (v) {
+        handleEdit(v);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, vehicles]);
+
+  const openSlider = () => {
+    setEditing(null);
+    setForm({ ...emptyForm });
+    setShowSlider(true);
+  };
+
+  const closeSlider = () => {
+    setShowSlider(false);
+    setEditing(null);
+    setForm({ ...emptyForm });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editing) {
@@ -32,9 +59,7 @@ export default function Vehicles() {
     } else {
       await api.vehicles.create(form);
     }
-    setShowForm(false);
-    setEditing(null);
-    setForm({ ...emptyForm });
+    closeSlider();
     load();
   };
 
@@ -51,7 +76,7 @@ export default function Vehicles() {
       assigned_to: v.assigned_to || "", group: v.group || "",
       status: v.status, notes: v.notes || "",
     });
-    setShowForm(true);
+    setShowSlider(true);
   };
 
   const handleDelete = async (id: number) => {
@@ -72,7 +97,7 @@ export default function Vehicles() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div />
-        <button onClick={() => { setEditing(null); setForm({ ...emptyForm }); setShowForm(true); }} className="btn-primary"><Plus size={16} /> Add Vehicle</button>
+        <button onClick={openSlider} className="btn-primary"><Plus size={16} /> Add Vehicle</button>
       </div>
 
       <div className="flex gap-3">
@@ -95,7 +120,7 @@ export default function Vehicles() {
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
             {vehicles.map((v) => (
-              <tr key={v.id} className="table-row">
+              <tr key={v.id} className="table-row cursor-pointer" onClick={() => navigate(`/vehicles/${v.id}`)}>
                 <td className="table-cell font-mono text-xs">{v.vin}</td>
                 <td className="table-cell font-medium text-gray-900 dark:text-white">{v.make} {v.model}</td>
                 <td className="table-cell">{v.year}</td>
@@ -103,10 +128,11 @@ export default function Vehicles() {
                 <td className="table-cell">{v.mileage?.toLocaleString() ?? "—"}</td>
                 <td className="table-cell"><StatusBadge status={v.status} /></td>
                 <td className="table-cell">{v.assigned_to || "—"}</td>
-                <td className="table-cell">
+                <td className="table-cell" onClick={(e) => e.stopPropagation()}>
                   <div className="flex gap-1">
-                    <button onClick={() => handleEdit(v)} className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"><Pencil size={15} /></button>
-                    <button onClick={() => handleDelete(v.id)} className="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"><Trash2 size={15} /></button>
+                    <button onClick={() => navigate(`/vehicles/${v.id}`)} className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="View details"><Eye size={15} /></button>
+                    <button onClick={() => handleEdit(v)} className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors" title="Edit"><Pencil size={15} /></button>
+                    <button onClick={() => handleDelete(v.id)} className="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors" title="Delete"><Trash2 size={15} /></button>
                   </div>
                 </td>
               </tr>
@@ -116,36 +142,68 @@ export default function Vehicles() {
         </table>
       </div>
 
-      {showForm && (
-        <div className="modal-overlay">
-          <form onSubmit={handleSubmit} className="modal-content max-w-2xl max-h-screen overflow-y-auto">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{editing ? "Edit Vehicle" : "Add Vehicle"}</h2>
-            <div className="grid grid-cols-2 gap-3">
-              {F("vin", "VIN")}{F("make", "Make")}{F("model", "Model")}{F("year", "Year", "number")}
-              {F("color", "Color")}{F("license_plate", "License Plate")}
-              {F("engine_type", "Engine Type")}{F("fuel_type", "Fuel Type")}
-              {F("transmission", "Transmission")}{F("mileage", "Mileage", "number")}
-              {F("origin_country", "Origin Country")}{F("destination_country", "Destination Country")}
-              {F("purchase_price", "Purchase Price", "number")}{F("purchase_date", "Purchase Date", "date")}
-              {F("owner_name", "Owner Name")}{F("owner_contact", "Owner Contact")}
-              {F("assigned_to", "Assigned To")}{F("group", "Group")}
-              <div>
-                <label className="label-text">Status</label>
-                <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="input-field">
-                  {["pending","pre-inspection","in-transit","post-inspection","cleared","rejected"].map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="label-text">Notes</label>
-                <textarea value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={2} />
-              </div>
+      {/* Slider Panel */}
+      {showSlider && (
+        <>
+          <div className="slider-overlay" onClick={closeSlider} />
+          <div className="slider-panel">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">{editing ? "Edit Vehicle" : "Add Vehicle"}</h2>
+              <button onClick={closeSlider} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <X size={20} className="text-gray-500" />
+              </button>
             </div>
-            <div className="flex justify-end gap-3 mt-5">
-              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
-              <button type="submit" className="btn-primary">{editing ? "Update" : "Create"}</button>
-            </div>
-          </form>
-        </div>
+            <form onSubmit={handleSubmit} className="flex flex-col h-[calc(100%-73px)]">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Basic Information</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {F("vin", "VIN")}{F("make", "Make")}{F("model", "Model")}{F("year", "Year", "number")}
+                    {F("color", "Color")}{F("license_plate", "License Plate")}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Technical Details</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {F("engine_type", "Engine Type")}{F("fuel_type", "Fuel Type")}
+                    {F("transmission", "Transmission")}{F("mileage", "Mileage", "number")}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Import Details</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {F("origin_country", "Origin Country")}{F("destination_country", "Destination Country")}
+                    {F("purchase_price", "Purchase Price", "number")}{F("purchase_date", "Purchase Date", "date")}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Assignment & Ownership</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {F("owner_name", "Owner Name")}{F("owner_contact", "Owner Contact")}
+                    {F("assigned_to", "Assigned To")}{F("group", "Group")}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Status & Notes</h3>
+                  <div>
+                    <label className="label-text">Status</label>
+                    <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="input-field">
+                      {["pending","pre-inspection","in-transit","post-inspection","cleared","rejected"].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="mt-3">
+                    <label className="label-text">Notes</label>
+                    <textarea value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="input-field" rows={3} />
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <button type="button" onClick={closeSlider} className="btn-secondary">Cancel</button>
+                <button type="submit" className="btn-primary">{editing ? "Update" : "Create"}</button>
+              </div>
+            </form>
+          </div>
+        </>
       )}
     </div>
   );
