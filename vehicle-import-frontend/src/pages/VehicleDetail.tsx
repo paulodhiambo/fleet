@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { api, Vehicle, PreInspection, PostInspection, ServiceEntry } from "../services/api";
+import { api, Vehicle, PreInspection, PostInspection, ServiceEntry, Issue, DocRecord } from "../services/api";
 import StatusBadge from "../components/StatusBadge";
-import { ArrowLeft, Pencil, Trash2, Car, MapPin, User, Calendar, DollarSign, FileText, Gauge, Settings, ClipboardCheck, Shield, Wrench, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Car, MapPin, User, Calendar, DollarSign, FileText, Gauge, Settings, ClipboardCheck, Shield, Wrench, CheckCircle, XCircle, AlertTriangle, FolderOpen, ExternalLink } from "lucide-react";
 
 export default function VehicleDetail() {
   const { id } = useParams<{ id: string }>();
@@ -11,6 +11,8 @@ export default function VehicleDetail() {
   const [preInspections, setPreInspections] = useState<PreInspection[]>([]);
   const [postInspections, setPostInspections] = useState<PostInspection[]>([]);
   const [services, setServices] = useState<ServiceEntry[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [documents, setDocuments] = useState<DocRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,11 +23,15 @@ export default function VehicleDetail() {
         api.preInspections.list({ vehicle_id: String(vehicleId) }),
         api.postInspections.list({ vehicle_id: String(vehicleId) }),
         api.services.list({ vehicle_id: String(vehicleId) }),
-      ]).then(([v, pre, post, svc]) => {
+        api.issues.list({ vehicle_id: String(vehicleId) }),
+        api.documents.list({ vehicle_id: String(vehicleId) }),
+      ]).then(([v, pre, post, svc, iss, docs]) => {
         setVehicle(v);
         setPreInspections(pre);
         setPostInspections(post);
         setServices(svc);
+        setIssues(iss);
+        setDocuments(docs);
         setLoading(false);
       }).catch(() => {
         setLoading(false);
@@ -311,6 +317,97 @@ export default function VehicleDetail() {
                 </span>
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Issues */}
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <AlertTriangle size={20} className="text-red-600 dark:text-red-400" />
+          Issues
+          <span className="ml-auto text-sm font-normal text-gray-500 dark:text-gray-400">{issues.length} record{issues.length !== 1 ? "s" : ""}</span>
+        </h2>
+        {issues.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500">
+            <AlertTriangle size={32} className="mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No issues reported</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {issues.map((issue) => (
+              <div key={issue.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{issue.title}</h3>
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={issue.priority} />
+                    <StatusBadge status={issue.status} />
+                  </div>
+                </div>
+                {issue.description && (
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{issue.description}</p>
+                )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span>Reported: {new Date(issue.reported_date).toLocaleDateString()}</span>
+                  {issue.reported_by && <span>By: {issue.reported_by}</span>}
+                  {issue.assigned_to && <span>Assigned: {issue.assigned_to}</span>}
+                  {issue.due_date && <span>Due: {new Date(issue.due_date).toLocaleDateString()}</span>}
+                  {issue.resolved_date && <span>Resolved: {new Date(issue.resolved_date).toLocaleDateString()}</span>}
+                </div>
+                {issue.notes && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">{issue.notes}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Documents */}
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <FolderOpen size={20} className="text-teal-600 dark:text-teal-400" />
+          Documents
+          <span className="ml-auto text-sm font-normal text-gray-500 dark:text-gray-400">{documents.length} record{documents.length !== 1 ? "s" : ""}</span>
+        </h2>
+        {documents.length === 0 ? (
+          <div className="text-center py-8 text-gray-400 dark:text-gray-500">
+            <FolderOpen size={32} className="mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No documents attached</p>
+          </div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="table-header">
+                <tr>
+                  <th>Title</th><th>Type</th><th>File</th><th>Expiry</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {documents.map((doc) => (
+                  <tr key={doc.id} className="table-row">
+                    <td className="table-cell font-medium text-gray-900 dark:text-white">{doc.title}</td>
+                    <td className="table-cell">{doc.document_type}</td>
+                    <td className="table-cell">
+                      {doc.file_url ? (
+                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline">
+                          {doc.file_name || "View"}
+                          <ExternalLink size={12} />
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">{doc.file_name || "—"}</span>
+                      )}
+                    </td>
+                    <td className="table-cell">
+                      {doc.expiry_date ? (
+                        <span className={new Date(doc.expiry_date) < new Date() ? "text-red-600 dark:text-red-400 font-medium" : ""}>
+                          {new Date(doc.expiry_date).toLocaleDateString()}
+                        </span>
+                      ) : "—"}
+                    </td>
+                    <td className="table-cell"><StatusBadge status={doc.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
