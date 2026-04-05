@@ -1,17 +1,13 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from app.database import init_db, get_db, async_session
-from app.models.role import Permission
 from sqlalchemy import select
-from app.routes import (
-    vehicles_router, pre_inspections_router, post_inspections_router,
-    tools_router, inspections_router, issues_router, reminders_router,
-    services_router, contacts_router, vendors_router, parts_router,
-    places_router, documents_router, reports_router,
-    roles_router, permissions_router,
-)
+
+from app.core.config import settings
+from app.core.exceptions import setup_exception_handlers
+from app.database import async_session
+from app.models.role import Permission
+from app.api.main import api_router
 
 
 DEFAULT_PERMISSIONS = [
@@ -38,7 +34,7 @@ DEFAULT_PERMISSIONS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    # Database tables are now managed by Alembic, but we still seed default permissions
     async with async_session() as session:
         result = await session.execute(select(Permission))
         existing = result.scalars().all()
@@ -49,35 +45,34 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Vehicle Import Tracking System", lifespan=lifespan)
-
-# Disable CORS. Do not remove this for full-stack development.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description="FMIS backend API for the Vehicle Import Tracking System.",
+    contact={
+        "name": "Admin Support",
+        "email": "support@example.com",
+    },
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
 )
 
-app.include_router(vehicles_router)
-app.include_router(pre_inspections_router)
-app.include_router(post_inspections_router)
-app.include_router(tools_router)
-app.include_router(inspections_router)
-app.include_router(issues_router)
-app.include_router(reminders_router)
-app.include_router(services_router)
-app.include_router(contacts_router)
-app.include_router(vendors_router)
-app.include_router(parts_router)
-app.include_router(places_router)
-app.include_router(documents_router)
-app.include_router(reports_router)
-app.include_router(roles_router)
-app.include_router(permissions_router)
+# Set all CORS enabled origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+setup_exception_handlers(app)
+
+app.include_router(api_router)
 
 
-@app.get("/healthz")
+@app.get("/healthz", tags=["health"])
 async def healthz():
-    return {"status": "ok"}
+    return {"status": "ok", "version": settings.VERSION}

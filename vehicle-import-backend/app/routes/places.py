@@ -1,11 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
-from app.database import get_db
-from app.models.place import Place
 from app.schemas.place import PlaceCreate, PlaceUpdate, PlaceResponse
+from app.services.place import PlaceService
 
 router = APIRouter(prefix="/api/places", tags=["places"])
 
@@ -13,51 +10,29 @@ router = APIRouter(prefix="/api/places", tags=["places"])
 @router.get("/", response_model=list[PlaceResponse])
 async def list_places(
     place_type: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    service: PlaceService = Depends(),
 ):
-    query = select(Place)
+    filters = {}
     if place_type:
-        query = query.where(Place.place_type == place_type)
-    result = await db.execute(query.order_by(Place.name.asc()))
-    return result.scalars().all()
+        filters["place_type"] = place_type
+    return await service.get_all(**filters)
 
 
 @router.get("/{place_id}", response_model=PlaceResponse)
-async def get_place(place_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Place).where(Place.id == place_id))
-    place = result.scalar_one_or_none()
-    if not place:
-        raise HTTPException(status_code=404, detail="Place not found")
-    return place
+async def get_place(place_id: int, service: PlaceService = Depends()):
+    return await service.get_by_id(place_id)
 
 
 @router.post("/", response_model=PlaceResponse, status_code=201)
-async def create_place(data: PlaceCreate, db: AsyncSession = Depends(get_db)):
-    place = Place(**data.model_dump())
-    db.add(place)
-    await db.commit()
-    await db.refresh(place)
-    return place
+async def create_place(data: PlaceCreate, service: PlaceService = Depends()):
+    return await service.create(data)
 
 
 @router.put("/{place_id}", response_model=PlaceResponse)
-async def update_place(place_id: int, data: PlaceUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Place).where(Place.id == place_id))
-    place = result.scalar_one_or_none()
-    if not place:
-        raise HTTPException(status_code=404, detail="Place not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(place, key, value)
-    await db.commit()
-    await db.refresh(place)
-    return place
+async def update_place(place_id: int, data: PlaceUpdate, service: PlaceService = Depends()):
+    return await service.update(place_id, data)
 
 
 @router.delete("/{place_id}", status_code=204)
-async def delete_place(place_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Place).where(Place.id == place_id))
-    place = result.scalar_one_or_none()
-    if not place:
-        raise HTTPException(status_code=404, detail="Place not found")
-    await db.delete(place)
-    await db.commit()
+async def delete_place(place_id: int, service: PlaceService = Depends()):
+    await service.delete(place_id)

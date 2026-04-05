@@ -1,11 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
-from app.database import get_db
-from app.models.vendor import Vendor
 from app.schemas.vendor import VendorCreate, VendorUpdate, VendorResponse
+from app.services.vendor import VendorService
 
 router = APIRouter(prefix="/api/vendors", tags=["vendors"])
 
@@ -13,51 +10,29 @@ router = APIRouter(prefix="/api/vendors", tags=["vendors"])
 @router.get("/", response_model=list[VendorResponse])
 async def list_vendors(
     status: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    service: VendorService = Depends(),
 ):
-    query = select(Vendor)
+    filters = {}
     if status:
-        query = query.where(Vendor.status == status)
-    result = await db.execute(query.order_by(Vendor.name.asc()))
-    return result.scalars().all()
+        filters["status"] = status
+    return await service.get_all(**filters)
 
 
 @router.get("/{vendor_id}", response_model=VendorResponse)
-async def get_vendor(vendor_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Vendor).where(Vendor.id == vendor_id))
-    vendor = result.scalar_one_or_none()
-    if not vendor:
-        raise HTTPException(status_code=404, detail="Vendor not found")
-    return vendor
+async def get_vendor(vendor_id: int, service: VendorService = Depends()):
+    return await service.get_by_id(vendor_id)
 
 
 @router.post("/", response_model=VendorResponse, status_code=201)
-async def create_vendor(data: VendorCreate, db: AsyncSession = Depends(get_db)):
-    vendor = Vendor(**data.model_dump())
-    db.add(vendor)
-    await db.commit()
-    await db.refresh(vendor)
-    return vendor
+async def create_vendor(data: VendorCreate, service: VendorService = Depends()):
+    return await service.create(data)
 
 
 @router.put("/{vendor_id}", response_model=VendorResponse)
-async def update_vendor(vendor_id: int, data: VendorUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Vendor).where(Vendor.id == vendor_id))
-    vendor = result.scalar_one_or_none()
-    if not vendor:
-        raise HTTPException(status_code=404, detail="Vendor not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(vendor, key, value)
-    await db.commit()
-    await db.refresh(vendor)
-    return vendor
+async def update_vendor(vendor_id: int, data: VendorUpdate, service: VendorService = Depends()):
+    return await service.update(vendor_id, data)
 
 
 @router.delete("/{vendor_id}", status_code=204)
-async def delete_vendor(vendor_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Vendor).where(Vendor.id == vendor_id))
-    vendor = result.scalar_one_or_none()
-    if not vendor:
-        raise HTTPException(status_code=404, detail="Vendor not found")
-    await db.delete(vendor)
-    await db.commit()
+async def delete_vendor(vendor_id: int, service: VendorService = Depends()):
+    await service.delete(vendor_id)

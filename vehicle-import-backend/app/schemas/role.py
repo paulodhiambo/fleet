@@ -3,6 +3,12 @@ from datetime import datetime
 from typing import Optional
 
 
+class PermissionCreate(BaseModel):
+    name: str
+
+class PermissionUpdate(BaseModel):
+    name: Optional[str] = None
+
 class PermissionResponse(BaseModel):
     id: int
     name: str

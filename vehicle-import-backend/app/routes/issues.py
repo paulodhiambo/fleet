@@ -1,11 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
 
-from app.database import get_db
-from app.models.issue import Issue
 from app.schemas.issue import IssueCreate, IssueUpdate, IssueResponse
+from app.services.issue import IssueService
 
 router = APIRouter(prefix="/api/issues", tags=["issues"])
 
@@ -15,55 +12,33 @@ async def list_issues(
     status: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
     vehicle_id: Optional[int] = Query(None),
-    db: AsyncSession = Depends(get_db),
+    service: IssueService = Depends(),
 ):
-    query = select(Issue)
+    filters = {}
     if status:
-        query = query.where(Issue.status == status)
+        filters["status"] = status
     if priority:
-        query = query.where(Issue.priority == priority)
+        filters["priority"] = priority
     if vehicle_id:
-        query = query.where(Issue.vehicle_id == vehicle_id)
-    result = await db.execute(query.order_by(Issue.created_at.desc()))
-    return result.scalars().all()
+        filters["vehicle_id"] = vehicle_id
+    return await service.get_all(**filters)
 
 
 @router.get("/{issue_id}", response_model=IssueResponse)
-async def get_issue(issue_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Issue).where(Issue.id == issue_id))
-    issue = result.scalar_one_or_none()
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    return issue
+async def get_issue(issue_id: int, service: IssueService = Depends()):
+    return await service.get_by_id(issue_id)
 
 
 @router.post("/", response_model=IssueResponse, status_code=201)
-async def create_issue(data: IssueCreate, db: AsyncSession = Depends(get_db)):
-    issue = Issue(**data.model_dump())
-    db.add(issue)
-    await db.commit()
-    await db.refresh(issue)
-    return issue
+async def create_issue(data: IssueCreate, service: IssueService = Depends()):
+    return await service.create(data)
 
 
 @router.put("/{issue_id}", response_model=IssueResponse)
-async def update_issue(issue_id: int, data: IssueUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Issue).where(Issue.id == issue_id))
-    issue = result.scalar_one_or_none()
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(issue, key, value)
-    await db.commit()
-    await db.refresh(issue)
-    return issue
+async def update_issue(issue_id: int, data: IssueUpdate, service: IssueService = Depends()):
+    return await service.update(issue_id, data)
 
 
 @router.delete("/{issue_id}", status_code=204)
-async def delete_issue(issue_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Issue).where(Issue.id == issue_id))
-    issue = result.scalar_one_or_none()
-    if not issue:
-        raise HTTPException(status_code=404, detail="Issue not found")
-    await db.delete(issue)
-    await db.commit()
+async def delete_issue(issue_id: int, service: IssueService = Depends()):
+    await service.delete(issue_id)
